@@ -4,8 +4,10 @@
 // http://imankhademi.com
 /* main function */
 
-#define TEST_NUMBER 2
+#define TEST_NUMBER 3
 
+
+// Example 1: LQR Control
 void runTest1()
 {
 	// reference: https://ece.gmu.edu/~gbeale/ece_620/discrete_lqr_01/discrete_lqr_01.html
@@ -17,13 +19,13 @@ void runTest1()
 	Matrix Q({ {10.f} });
 	Matrix Qf({ {50.f} });
 	Matrix R({ {1.0f} });
-	DT_SS_Model mySys(a, b, c, x0);
-	LQR_Control myLQR(mySys, Q, Qf, R, n);
+	LQR_Control myLQR(a, b, c, x0, Q, Qf, R, n);
 	myLQR.runLQRControl();
 	myLQR.exportResults();
 	return;
 }
 
+// Example 2: LQR Control
 Matrix identityMatrix(int size);
 void runTest2()
 {
@@ -39,11 +41,28 @@ void runTest2()
 	Matrix R;
 	R = identityMatrix(1);
 	R = rho * R;
-	DT_SS_Model mySys(a, b, c, x0);
-	LQR_Control myLQR(mySys, Q, Qf, R, n);
+	LQR_Control myLQR(a, b, c, x0, Q, Qf, R, n);
 	myLQR.runLQRControl();
 	myLQR.exportResults();
 	return;
+}
+
+// Example3: Kalman Filter
+ostream& operator<<(ostream& out, Vector2D v);
+void runTest3()
+{
+	Matrix a({ {1.9223f,-0.9604f},{1.f,0.f} });
+	Matrix b({ {1.0f},{1.0f} });
+	Matrix c({ {1.0f,.0f} });
+	Matrix g({ {1.0f},{1.0f} });
+	Matrix P0({ {0.01f,0.},{0.f,0.02f} });// must be Symmetric Psitive Semi-Definite
+	ColumnVector x0 = { {0.,0.} };
+	Matrix wp({ {0.01} });
+	Matrix vm({ {0.01} });
+	Kalman_Filter filter(a, b, c, g, wp, vm, P0, x0);
+	filter.runKalmanFilter(100, { {1.25} });
+	superVector K = filter.getKalmanGain();
+	filter.exportResults();// kalman_results.csv
 }
 
 int main()
@@ -56,6 +75,9 @@ int main()
 		break;
 	case 2:
 		runTest2();
+		break;
+	case 3:
+		runTest3();
 		break;
 	}
 	return 0;
