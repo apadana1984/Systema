@@ -18,6 +18,7 @@ Vector2D Transpose(Vector2D A);
 Matrix identityMatrix(int size);
 ColumnVector operator*(Vector2D vl, ColumnVector vr);
 vector<float> operator-(vector<float> v1, vector<float> v2);
+void LQR_RicattiCore(int Nh, Matrix A, Matrix B, Matrix Qf, Matrix Q, Matrix R, superVector& Pr, superVector& FeedbackGain);
 
 DT_SS_Model::DT_SS_Model(Matrix a, Matrix b, Matrix c, ColumnVector x0)
 {
@@ -172,43 +173,10 @@ LQR_Control::LQR_Control(Matrix a, Matrix b, Matrix c, ColumnVector x0, Matrix q
 
 void LQR_Control::RicattiSolver()
 {
-	Pr.push_back(Qf.getData());
-	Matrix P_t1; // P(t-1)
-	Matrix A,ATr,B,BTr,L,APA,P_t,APB, BPA, R_BPBi;
+	Matrix A, B;
 	A = getA();
 	B = getB();
-	ATr = A.Transpose();
-	BTr = B.Transpose();
-
-	// Start the Loop Here
-	for (int t = Nh; t > 0; t--) // Dynamic Programming goes backward in time
-	{
-		P_t = Pr.back();// P(t)
-		APA = ATr * P_t;
-		APA = APA * A; // A'*P*A
-		P_t1 = Q + APA;
-
-		APB = ATr * P_t;
-		APB = APB * B;// A'*P*B
-
-		BPA = APB.Transpose();// B'*P*A
-
-		R_BPBi = BTr * P_t;
-		R_BPBi = R_BPBi * B;
-		R_BPBi = R_BPBi + R;
-		R_BPBi = Inverse(R_BPBi);// (R+B'*P*B)^-1
-
-		R_BPBi = R_BPBi * BPA; 
-		R_BPBi = -1.f * R_BPBi;// Kt
-		FeedbackGain.push_back(R_BPBi.getData());
-		R_BPBi = APB * R_BPBi ;
-
-		P_t1 = P_t1 + R_BPBi;// Solution
-		Pr.push_back(P_t1.getData()); // attach it to the super vector
-	}
-	// make them forward in time
-	reverse(Pr.begin(),Pr.end());
-	reverse(FeedbackGain.begin(), FeedbackGain.end());
+	LQR_RicattiCore(Nh, A, B, Qf, Q, R, Pr, FeedbackGain);
 	return;
 }
 
@@ -359,10 +327,127 @@ void Kalman_Filter::exportResults(string filename)
 		if (i > 0)
 			for (size_t j = 0; j < KalmanGain[0].size(); j++)
 			{
-				for(int k =0;k<KalmanGain[0][0].size();k++)
+				for(size_t k =0;k<KalmanGain[0][0].size();k++)
 					results << KalmanGain [i-1][j][k] << ",";
 			}
 		results << endl;
 	}
+	return;
+}
+
+/**************LQG Control***************/
+LQG_Control::
+LQG_Control(Matrix qx, Matrix qf, Matrix ru, Matrix a, Matrix b, Matrix c, Matrix g, Matrix wp, Matrix vm, Matrix P0, ColumnVector x0, int horizon)
+	:Kalman_Filter(a, b, c, g, wp, vm, P0, x0)
+{
+	Q = qx;
+	Qf = qf;
+	R = ru;
+	Nh = horizon;
+}
+
+void LQG_Control::RicattiSolver()
+{
+	Matrix A, B;
+	A = getA();
+	B = getB();
+	LQR_RicattiCore(Nh, A, B, Qf, Q, R, Pr, FeedbackGain);
+	return;
+}
+
+void LQG_Control::runLQGControl()
+{
+	RicattiSolver();// Find the Feedback Gain
+	ColumnVector reference;
+	reference.assign(getB().getSize(0), 0); // zero reference input for the regulator
+	for (int i = 0; i < Nh; i++)
+	{
+		// State Estimation
+		singleStepEstimation(reference,getOutput().back());
+		ColumnVector Xhat_t = getEstimates().back();// we are applying 'Xhat' instead of 'x'
+		// Feedback Control
+		Vector2D Ki = FeedbackGain[i];
+		ColumnVector ut = Ki * Xhat_t;
+		sysUpdate(ut);
+	}
+	return;
+}
+
+void LQG_Control::exportResults(string filename)
+{
+	ofstream results(filename);
+	results << "sample,";
+	for (int i = 0; i < getA().getSize(0); i++)
+	{
+		results << "x" << i << ",";
+	}
+	for (int i = 0; i < getA().getSize(0); i++)
+	{
+		results << "x_hat" << i << ",";
+	}
+	for (int i = 0; i < getA().getSize(0); i++)
+	{
+		for (int j = 0; j < getC().getSize(0); j++)
+			results << "Feedback_Gain" << i << j << ",";
+	}
+	results << endl;
+	for (size_t i = 0; i < getStates().size(); i++)
+	{
+		results << i << ",";
+		results << getStates()[i];
+		results << getEstimates()[i];
+		if (i > 0)
+			for (size_t j = 0; j < getFeedbackGain()[0].size(); j++)
+			{
+				for (size_t k = 0; k < getFeedbackGain()[0][0].size(); k++)
+					results << getFeedbackGain()[i - 1][j][k] << ",";
+			}
+		results << endl;
+	}
+	return;
+}
+
+/*Auxiliary Functions*/
+
+// Minimize: J = X(Nh)'*Qf*X(Nh) + SUM(X'*Q*X + U'*R*U)
+// Note: This is a regulator, so the reference input is zero.(i.e u=Gain*x)
+void LQR_RicattiCore(int Nh, Matrix A, Matrix B, Matrix Qf, Matrix Q, Matrix R, superVector& Pr, superVector& FeedbackGain)
+{
+	Matrix P_t1; // P(t-1)
+	Matrix ATr, BTr, L, APA, P_t, APB, BPA, R_BPBi;
+	ATr = A.Transpose();
+	BTr = B.Transpose();
+
+	Pr.push_back(Qf.getData());
+	// Start the Loop Here
+	for (int t = Nh; t > 0; t--) // Dynamic Programming goes backward in time
+	{
+		P_t = Pr.back();// P(t)
+		APA = ATr * P_t;
+		APA = APA * A; // A'*P*A
+		P_t1 = Q + APA;
+
+		APB = ATr * P_t;
+		APB = APB * B;// A'*P*B
+
+		BPA = APB.Transpose();// B'*P*A
+
+		R_BPBi = BTr * P_t;
+		R_BPBi = R_BPBi * B;
+		R_BPBi = R_BPBi + R;
+		R_BPBi = Inverse(R_BPBi);// (R+B'*P*B)^-1
+
+		R_BPBi = R_BPBi * BPA;
+		R_BPBi = -1.f * R_BPBi;// Kt
+		FeedbackGain.push_back(R_BPBi.getData());
+		R_BPBi = APB * R_BPBi;
+
+		P_t1 = P_t1 + R_BPBi;// Solution
+		Pr.push_back(P_t1.getData()); // attach it to the super vector
+	}
+
+	// make them forward in time
+	reverse(Pr.begin(), Pr.end());
+	reverse(FeedbackGain.begin(), FeedbackGain.end());
 	return;
 }

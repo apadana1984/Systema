@@ -4,8 +4,7 @@
 // http://imankhademi.com
 /* main function */
 
-#define TEST_NUMBER 3
-
+#define TEST_NUMBER 4
 
 // Example 1: LQR Control
 void runTest1()
@@ -55,15 +54,37 @@ void runTest3()
 	Matrix b({ {1.0f},{1.0f} });
 	Matrix c({ {1.0f,.0f} });
 	Matrix g({ {1.0f},{1.0f} });
-	Matrix P0({ {0.01f,0.},{0.f,0.02f} });// must be Symmetric Psitive Semi-Definite
-	ColumnVector x0 = { {0.,0.} };
-	Matrix wp({ {0.01} });
-	Matrix vm({ {0.01} });
+	Matrix P0({ {0.01f,0.},{0.f,0.02f} });// must be Symmetric Positive Semi-Definite
+	ColumnVector x0 = { {0.f,0.f} };
+	Matrix wp({ {0.01f} });
+	Matrix vm({ {0.01f} });
 	Kalman_Filter filter(a, b, c, g, wp, vm, P0, x0);
 	filter.runKalmanFilter(100, { {1.25} });
 	superVector K = filter.getKalmanGain();
 	filter.exportResults();// kalman_results.csv
 }
+
+// Example 4: LQG Control
+
+void runTest4()
+{
+	int n = 100;
+	Matrix a({ {1.9223f,-0.9604f},{1.f,0.f} });
+	Matrix b({ {1.0f},{1.0f} });
+	Matrix c({ {1.0f,.0f} });
+	Matrix g({ {1.0f},{1.0f} });
+	Matrix Q({ {10.f,0.f},{0.f,10.f} });// C'*C
+	Matrix Qf(Q);// Qf = Q
+	Matrix R({ {1.0f} });
+	Matrix P0({ {0.01f,0.f},{0.f,0.02f} });// must be Symmetric Psitive Semi-Definite
+	ColumnVector x0 = { {10.f,10.f} };
+	Matrix wp({ {0.01f} });
+	Matrix vm({ {0.01f} });
+	LQG_Control controller(Q, Qf, R, a, b, c, g, wp, vm, P0, x0, n);
+	controller.runLQGControl();
+	controller.exportResults("LQG_results.csv");
+}
+
 
 int main()
 {
@@ -79,6 +100,9 @@ int main()
 	case 3:
 		runTest3();
 		break;
+	case 4:
+		runTest4();
+		break;
+		return 0;
 	}
-	return 0;
 }

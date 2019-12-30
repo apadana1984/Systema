@@ -83,7 +83,7 @@ public:
 	void exportResults(string filename = "results.csv");
 };
 
-class Kalman_Filter:SS_Noisy_Model
+class Kalman_Filter:public SS_Noisy_Model
 {
 private:
 	superVector KalmanGain;
@@ -97,4 +97,36 @@ public:
 	void singleStepEstimation(ColumnVector referenceInput,ColumnVector observation);
 	void exportResults(string filename = "kalman_results.csv");
 	void runKalmanFilter(int samples,ColumnVector uref);
+};
+// LQG_Control: Kalman Filter + LQR
+// Note: Kalman_Filter already includes the noisy process model
+class LQG_Control :public Kalman_Filter
+{
+	/* Minimize: J = E{X(N)'*Qf*X(N) + SUM(X'*Q*X + U'*R*U)}
+
+	subject to:
+
+	x(k+1) = A*x(k) + B*u(k) + G*w(k)
+	y(k) = C*x(k) + v(k)
+	u(k) = G*x_hat(k)
+	x_hat(k) = Kalman_Filter(y(k))
+
+	w : process noise, Wc = Cov(w)
+	v : measurement noise, Vc = Cov(v)
+	P0: Covariance of Estimation Error at k=0 : P0 = Cov(x(0) - X_hat(0))
+	x_hat : Estimation of 'x' obtained from Kalman Filter
+	*/
+private:
+	Matrix Q;// State Cost (Positive Semi-Definite)
+	Matrix Qf;// Final State Cost (Positive Semi-Definite)
+	Matrix R; // Input Cost (Positive Definite)
+	int Nh; // Finite Time Horizon
+	superVector FeedbackGain;
+	superVector Pr; // Ricatti Equation Solution Matrix over time
+	void RicattiSolver();
+public:
+	LQG_Control(Matrix qx, Matrix qf, Matrix ru, Matrix a, Matrix b, Matrix c, Matrix g, Matrix wp, Matrix vm, Matrix P0, ColumnVector x0, int horizon);
+	void runLQGControl();
+	void exportResults(string filename);
+	superVector getFeedbackGain() { return FeedbackGain; };
 };
