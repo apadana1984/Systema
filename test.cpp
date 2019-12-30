@@ -73,7 +73,7 @@ void runTest4()
 	Matrix b({ {1.0f},{1.0f} });
 	Matrix c({ {1.0f,.0f} });
 	Matrix g({ {1.0f},{1.0f} });
-	Matrix Q({ {10.f,0.f},{0.f,10.f} });// C'*C
+	Matrix Q({ {10.f,0.f},{0.f,10.f} });//
 	Matrix Qf(Q);// Qf = Q
 	Matrix R({ {1.0f} });
 	Matrix P0({ {0.01f,0.f},{0.f,0.02f} });// must be Symmetric Psitive Semi-Definite
@@ -103,6 +103,6 @@ int main()
 	case 4:
 		runTest4();
 		break;
-		return 0;
 	}
+	return 0;
 }
